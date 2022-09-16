@@ -1,33 +1,27 @@
-/*  Global class for simulating the movement of particle through a 1km wind grid
-
-    credit: All the credit for this work goes to: https://github.com/cambecc for creating the repo:
-      https://github.com/cambecc/earth. The majority of this code is directly take nfrom there, since its awesome.
-
-    This class takes a canvas element and an array of data (1km GFS from http://www.emc.ncep.noaa.gov/index.php?branch=GFS)
-    and then uses a mercator (forward/reverse) projection to correctly map wind vectors in "map space".
-
-    The "start" method takes the bounds of the map at its current extent and starts the whole gridding,
-    interpolation and animation process.
+/*  Глобальный класс для моделирования движения частиц через 1-километровую ветровую сетку 
+    Большая часть этого кода привлекла внимание, так как он потрясающий. 
+    Этот класс принимает элемент массива холста и данных (1 км GFS с http://www.emc.ncep.noaa.gov/index.php?branch=GFS), а затем использует проекцию Меркатора (прямая/обратная) для правильного отображения векторов ветра в «пространстве карты». 
+    Метод «старт» берет границы карты в ее выборе экстента и запускает всю сетку, процесс интерполяции и анимации.
 */
 
 var Windy = function( params ){
-  var VELOCITY_SCALE = 0.011;             // scale for wind velocity (completely arbitrary--this value looks nice)
-  var INTENSITY_SCALE_STEP = 10;            // step size of particle intensity color scale
-  var MAX_WIND_INTENSITY = 40;              // wind velocity at which particle intensity is maximum (m/s)
-  var MAX_PARTICLE_AGE = 100;                // max number of frames a particle is drawn before regeneration
-  var PARTICLE_LINE_WIDTH = 2;              // line width of a drawn particle
-  var PARTICLE_MULTIPLIER = 1/30;              // particle count scalar (completely arbitrary--this values looks nice)
-  var PARTICLE_REDUCTION = 0.75;            // reduce particle count to this much of normal for mobile devices
-  var FRAME_RATE = 20;                      // desired milliseconds per frame
-  var BOUNDARY = 0.45;
+  var VELOCITY_SCALE = 0.011;               // Шкала скорости ветра (совершенно произвольная - это значение выглядит красиво)
+  var INTENSITY_SCALE_STEP = 10;            // Размер шага цветовой шкалы интенсивности частиц
+  var MAX_WIND_INTENSITY = 40;              // Скорость ветра, при которой интенсивность частиц максимальна (м/с)
+  var MAX_PARTICLE_AGE = 100;               // Максимальное количество кадров, в которых частица отрисовывается до регенерации
+  var PARTICLE_LINE_WIDTH = 2;              // Ширина линии нарисованной частицы
+  var PARTICLE_MULTIPLIER = 1/30;           // Скаляр количества частиц (совершенно произвольный - эти значения выглядят красиво)
+  var PARTICLE_REDUCTION = 0.75;            // Уменьшите количество частиц до такого уровня нормы для мобильных устройств
+  var FRAME_RATE = 20;                      // Желаемые миллисекунды на кадр
+  var BOUNDARY = 0.45;                      // Размеры границы
 
-  var NULL_WIND_VECTOR = [NaN, NaN, null];  // singleton for no wind in the form: [u, v, magnitude]
+  var NULL_WIND_VECTOR = [NaN, NaN, null];  // Синглтон для отсутствия ветра в форме: [u, v, величина]
   var TRANSPARENT_BLACK = [255, 0, 0, 0];
 
   var τ = 2 * Math.PI;
   var H = Math.pow(10, -5.2);
 
-  // interpolation for vectors like wind (u,v,m)
+  // Интерполяция для таких векторов, как ветер (u,v,m)
   var bilinearInterpolateVector = function(x, y, g00, g10, g01, g11) {
       var rx = (1 - x);
       var ry = (1 - y);
@@ -69,13 +63,13 @@ var Windy = function( params ){
       var builder = createBuilder(data);
 
       var header = builder.header;
-      var λ0 = header.lo1, φ0 = header.la1;  // the grid's origin (e.g., 0.0E, 90.0N)
-      var Δλ = header.dx, Δφ = header.dy;    // distance between grid points (e.g., 2.5 deg lon, 2.5 deg lat)
-      var ni = header.nx, nj = header.ny;    // number of grid points W-E and N-S (e.g., 144 x 73)
+      var λ0 = header.lo1, φ0 = header.la1;  // Начало сетки (например, 0,0 в.д., 90,0 с.ш.)
+      var Δλ = header.dx, Δφ = header.dy;    // Расстояние между точками сетки (2,5° долготы, 2,5° широты)
+      var ni = header.nx, nj = header.ny;    // количество узлов сетки W-E и N-S (144 x 73)
       var date = new Date(header.refTime);
       date.setHours(date.getHours() + header.forecastTime);
 
-      // Scan mode 0 assumed. Longitude increases from λ0, and latitude decreases from φ0.
+      // Предусмотрен режим сканирования 0. Долгота увеличивается от λ0, а широта уменьшается от φ0.
       // http://www.nco.ncep.noaa.gov/pmb/docs/grib2/grib2_table3-4.shtml
       var grid = [], p = 0;
       var isContinuous = Math.floor(ni * Δλ) >= 360;
@@ -85,7 +79,7 @@ var Windy = function( params ){
               row[i] = builder.data(p);
           }
           if (isContinuous) {
-              // For wrapped grids, duplicate first column as last column to simplify interpolation logic
+              // Для обернутых сеток дублируйте первый столбец в качестве последнего столбца, чтобы упростить логику интерполяции.
               row.push(row[0]);
           }
           grid[j] = row;
@@ -122,37 +116,35 @@ var Windy = function( params ){
 
 
   /**
-   * @returns {Boolean} true if the specified value is not null and not undefined.
+   * @returns {Boolean} true - если указанное значение не является нулевым
    */
   var isValue = function(x) {
       return x !== null && x !== undefined;
   }
 
   /**
-   * @returns {Number} returns remainder of floored division, i.e., floor(a / n). Useful for consistent modulo
-   *          of negative numbers. See http://en.wikipedia.org/wiki/Modulo_operation.
+   * @returns {Number} возвращает остаток деления на пол, т. е. пол (a / n). Полезно для согласованного модуля отрицательных чисел. See http://en.wikipedia.org/wiki/Modulo_operation.
    */
   var floorMod = function(a, n) {
       return a - n * Math.floor(a / n);
   }
 
   /**
-   * @returns {Number} the value x clamped to the range [low, high].
+   * @returns {Number} значение x ограничено диапазоном [низкий, высокий].
    */
   var clamp = function(x, range) {
       return Math.max(range[0], Math.min(x, range[1]));
   }
 
   /**
-   * @returns {Boolean} true if agent is probably a mobile device. Don't really care if this is accurate.
+   * @returns {Boolean} true - если является мобильным устройством.
    */
   var isMobile = function() {
       return (/android|blackberry|iemobile|ipad|iphone|ipod|opera mini|webos/i).test(navigator.userAgent);
   }
 
   /**
-   * Calculate distortion of the wind vector caused by the shape of the projection at point (x, y). The wind
-   * vector is modified in place and returned by this function.
+   * Искажение вектора ветра, вызванное формой проекции в точке (x, y). Вектор ветра изменяется на месте и возвращается этой функцией.
    */
   var distort = function(projection, λ, φ, x, y, scale, wind, windy) {
       var u = wind[0] * scale;
